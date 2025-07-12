@@ -1,0 +1,61 @@
+{
+  "name": "Test",
+  "age": 12,
+  "admin": false,
+  "email": null,
+  "stats": {
+    "score": 123456,
+    "rank": "Platinum",
+    "active": true,
+    "last_login": "2025-07-09T18:42:31Z"
+  },
+  "skills": [
+    "C++",
+    "Embedded Systems",
+    "adskfjhhlajkfdshljkadfshljkdafshljkdfashljk",
+    "OpenGL",
+    "Parsing",
+    "Stuff"
+  ],
+  "projects": [
+    {
+      "title": "Json Flow",
+      "language": "C/C++",
+      "completed": false,
+      "dependencies": ["imgui", "adsflkjhadfshljkafdlhjskhljkadfs", "timeline"]
+    },
+    {
+      "title": "asdflkjhladkhfshljkadfhjlkadfs",
+      "language": "adsfljkjhlkadfslhjkadfslhjkfads",
+      "completed": true,
+      "features": {
+        "input_remap": true,
+        "viGEm_support": false,
+        "configurable": false,
+        "size": 4096
+      }
+    }
+  ],
+  "unicode_test": "Symbols → ©asdfadsflkal;dksfjjlhkfdas",
+  "escape_test": "adsfk;lj;kajldsf;jklasdfQuotes: \\\" Slash: \\\\ Newline: \\n Tab: \\t",
+  "numbers": [
+    -13,
+    42,
+    -2.99792458e8,
+    6.022e23,
+    3.14159,
+    0,
+    1,
+    2,
+    3
+  ],
+  "flags": {
+    "experimental": true,
+    "debug_mode": true,
+    "verbose": true,
+    "features": {
+      "featureA": true,
+      "featureB": true
+    }
+  }
+}

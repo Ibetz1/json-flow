@@ -1,5 +1,7 @@
 {
     "files.associations": {
-        "xmemory": "cpp"
+        "xmemory": "cpp",
+        "sstream": "cpp",
+        "chrono": "cpp"
     }
 }

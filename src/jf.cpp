@@ -3,6 +3,10 @@
 #include "memory.h"
 #include "string.h"
 
+int __jf_heap_count__ = 0; 
+int __jf_heap_count_alloc__ = 0; 
+int __jf_heap_count_free__ = 0;
+
 /*
     STRINGS
 */
@@ -164,10 +168,11 @@ jf_Error jf_node_free(jf_Node* node) {
     jf_Error err = JF_SUCCESS;
     if (!node) { return JF_NO_REF; }
 
+
     switch (node->type) {
-        case (JF_STRING) : err = jf_string_free(&node->s_value);
-        case (JF_OBJECT) : err = jf_object_free(&node->o_value);
-        case (JF_ARRAY)  : err = jf_array_free (&node->a_value);
+        case (JF_STRING) : err = jf_string_free(&node->s_value); break;
+        case (JF_OBJECT) : err = jf_object_free(&node->o_value); break;
+        case (JF_ARRAY)  : err = jf_array_free (&node->a_value); break;
     }
 
     jf_Node* next = node->next;

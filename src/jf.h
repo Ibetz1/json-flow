@@ -8,6 +8,7 @@
 #ifndef _JF_HPP
 #define _JF_HPP
 
+#include "stdio.h"
 #include <cstdlib>
 
 /*
@@ -94,6 +95,7 @@
 #define JF_MATH_MIN(A,B) (((A)<(B))?(A):(B))
 #define JF_MATH_MAX(A,B) (((A)>(B))?(A):(B))
 
+#define JF_STRING(str, size) { (char*) str, size }
 #define JF_STRING_STATIC(str) { (char*) str, sizeof(str) }
 #define JF_STRING_CONST(str) { (char*) str, strlen(str) }
 
@@ -124,7 +126,8 @@ enum jf_Error {
     JF_INVALID_SYNTAX,
     JF_INVALID_ESCAPE,
     JF_UNEXPECTED_EOF,
-    JF_INVALID_TYPE
+    JF_INVALID_TYPE,
+    JF_INVALID_FILE_PATH
 };
 
 enum jf_Bool {

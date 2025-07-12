@@ -1,0 +1,58 @@
+{
+  "name": "Ian Betz",
+  "age": 31,
+  "admin": true,
+  "email": null,
+  "stats": {
+    "score": 1876.45,
+    "rank": "Platinum",
+    "active": true,
+    "last_login": "2025-07-09T18:42:31Z"
+  },
+  "skills": [
+    "C++",
+    "Embedded Systems",
+    "Reverse Engineering",
+    "Graphics",
+    "OpenGL",
+    "Parsing"
+  ],
+  "projects": [
+    {
+      "title": "Json Flow",
+      "language": "C/C++",
+      "completed": false,
+      "dependencies": ["imgui", "custom_allocator", "timeline"]
+    },
+    {
+      "title": "UltraKey",
+      "language": "Flutter",
+      "completed": true,
+      "features": {
+        "input_remap": true,
+        "viGEm_support": true,
+        "configurable": true,
+        "size": 2048
+      }
+    }
+  ],
+  "unicode_test": "Symbols → © ™ ⇨ ↯ ☠",
+  "escape_test": "Quotes: \\\" Slash: \\\\ Newline: \\n Tab: \\t",
+  "numbers": [
+    42,
+    -13,
+    3.14159,
+    6.022e23,
+    -2.99792458e8,
+    0
+  ],
+  "flags": {
+    "experimental": false,
+    "debug_mode": true,
+    "verbose": false,
+    "features": {
+      "featureA": true,
+      "featureB": false
+    }
+  }
+}
