@@ -2,11 +2,13 @@
 #include "json_parse.hpp"
 #include "stdio.h"
 
-/*
-    create a timeline of difs which can zoom in on node keys
-    - create current timeline entry renderer
-    - create overall node timeline renderer
+#include <GLFW/glfw3.h>
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
 
+
+/*
     load jf_tree back into a file format (yaml, xml, json)
 
     recursively load a file tree into memory (filtering out json data, yml data, etc)
@@ -15,93 +17,114 @@
     UI :)
 */
 
-struct jf_Timeline {
-    jf_DiffNode* entry;
-    jf_Timeline* prev;
-    jf_Timeline* next;
-};
+int main() {
+    // Init GLFW
+    if (!glfwInit()) return -1;
 
-jf_Error jf_timeline_alloc(jf_Timeline* timeline, jf_DiffNode* entry) {
-    timeline->entry = NULL;
-    timeline->prev  = NULL;
-    timeline->next  = NULL;
-    return JF_SUCCESS;
-}
+    // Request OpenGL 3.3 core (optional but recommended)
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-jf_Error jf_timeline_free(jf_Timeline* timeline) {
-    jf_Timeline* next;
-    
-    if (next) {
-        return jf_timeline_free(next);
+    GLFWwindow* window = glfwCreateWindow(800, 600, "ImGui + GLFW", nullptr, nullptr);
+    if (!window) {
+        glfwTerminate();
+        return -1;
     }
 
-    return JF_SUCCESS;
-}
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1); // Enable vsync
 
-// will link the back most node of b to the front most node of a
-jf_Error jf_timeline_attach(jf_Timeline* a, jf_Timeline* b) {
-    if (!a || !b) { return JF_NO_REF; }
-    
-    jf_Timeline* cur_front = a;
-    jf_Timeline* cur_back  = b;
+    // Setup ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui::StyleColorsDark();
 
-    // find back and front most nodes
-    while (cur_front->next) { cur_front = cur_front->next; }
-    while (cur_back->prev) { cur_back = cur_back->prev; }
+    // Initialize backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
 
-    // link nodes front and back
-    cur_front->next = cur_back;
-    cur_back->prev = cur_front;
-    
-    return JF_SUCCESS;
-}
+    // Main loop
+    while (!glfwWindowShouldClose(window)) {
+        glfwPollEvents();
 
-#define jf_timeline_front_insert(a, b) ({ jf_timeline_attach(a, b); })
-#define jf_timeline_back_insert (a, b) ({ jf_timeline_attach(b, a); })
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-jf_Error jf_timeline_build_from_file_names(jf_Timeline* timeline, jf_String* files, size_t count) {
-    return JF_SUCCESS;
-}
+        ImGui::Begin("Simple Window");
+        ImGui::Text("No glad needed!");
+        ImGui::End();
 
-jf_Error jf_timeline_build_from_node_name(jf_Timeline* timeline, jf_String name) {
-    return JF_SUCCESS;
-}
+        ImGui::Render();
+        int display_w, display_h;
+        glfwGetFramebufferSize(window, &display_w, &display_h);
+        glViewport(0, 0, display_w, display_h);
+        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
 
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        glfwSwapBuffers(window);
+    }
 
+    // Cleanup
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
-int main() {
-    jf_Error err;
-
-    jf_start();
-
-    jf_String timeline_files[] = {
-        JF_STRING_STATIC("./test_timeline/test1.json"),
-        JF_STRING_STATIC("./test_timeline/test2.json"),
-        JF_STRING_STATIC("./test_timeline/test3.json"),
-    };
-
-    jf_Node* node_1 = nullptr;
-    err = jf_parse_from_json_file(&node_1, timeline_files[0]);
-
-    jf_Node* node_2 = nullptr;
-    err = jf_parse_from_json_file(&node_2, timeline_files[1]);
-
-    // jf_print_node(node_1);
-    // jf_print_node(node_2);
-
-    jf_DiffNode* diff;
-    jf_print_error(jf_alloc_diff(&diff, NULL, NULL));
-    jf_print_error(jf_compare_object_diff(diff, &node_1->o_value,&node_2->o_value));
-    // jf_print_error(jf_compare_object_diff(diff, &node_1->o_value, NULL));
-    // jf_print_error(jf_compare_object_diff(diff, NULL, &node_1->o_value));
-    
-    jf_print_diff_node(diff, 2);
-
-    printf("finished\n");
-
-    jf_free_diff(diff);
-    jf_node_free(node_1);
-    jf_node_free(node_2);
-    jf_finish();
     return 0;
 }
+
+// int main() {
+//     jf_Error err;
+
+//     jf_start();
+
+//     // jf_String timeline_files[] = {
+//     //     JF_STRING_STATIC("./test_timeline/test1.json"),
+//     //     JF_STRING_STATIC("./test_timeline/test2.json"),
+//     //     JF_STRING_STATIC("./test_timeline/test3.json"),
+//     // };
+
+//     // jf_String test_path[] = {
+//     //     JF_STRING_STATIC("flags"),
+//     //     JF_STRING_STATIC("debug_mode"),
+//     //     JF_STRING_STATIC("1"),
+//     // };
+
+//     // jf_TimelineContext* context = NULL;
+//     // jf_Timeline* timeline = NULL;
+
+//     // jf_print_error(jf_timeline_context_alloc(&context, 3));
+//     // jf_print_error(jf_timeline_context_add_files(context, timeline_files));
+
+//     // jf_print_error(jf_timeline_build_from_file_names(&timeline, context));
+
+//     // // jf_DiffNode* test_diff = jf_diff_filter_path(timeline->entry, test_path, 1);
+//     // // jf_print_diff_node(test_diff, 1);
+
+//     // jf_Timeline* filtered_timeline = NULL;
+//     // jf_timeline_filter_path(timeline, &filtered_timeline, test_path, 2);
+
+//     // jf_Timeline* cur = filtered_timeline;
+//     // while (cur) {
+//     //     printf("---------- version %i ----------\n", cur->version);
+
+//     //     jf_print_diff_node(cur->entry, 2);
+
+//     //     printf("--------------------------------\n\n");
+
+//     //     cur = cur->next;
+//     // }
+
+//     // jf_timeline_free(filtered_timeline);
+
+//     // jf_print_error(jf_timeline_free(timeline));
+//     // jf_print_error(jf_timeline_context_free(context));
+
+//     jf_finish();
+//     return 0;
+// }

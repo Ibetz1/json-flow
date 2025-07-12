@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include "memory.h"
 #include "string.h"
+#include "json_parse.hpp"
 
 int __jf_heap_count__ = 0; 
 int __jf_heap_count_alloc__ = 0; 
@@ -280,7 +281,7 @@ jf_Bool jf_node_compare(jf_Node* a, jf_Node* b) {
     diffing (timeline comparisions)
 */
 
-jf_Error jf_alloc_diff(jf_DiffNode** node, jf_Node* a, jf_Node* b) {
+jf_Error jf_diff_alloc(jf_DiffNode** node, jf_Node* a, jf_Node* b) {
     *node = (jf_DiffNode*) jf_alloc(sizeof(jf_DiffNode));
     if (!node) { return JF_NO_MEM; }
 
@@ -291,6 +292,8 @@ jf_Error jf_alloc_diff(jf_DiffNode** node, jf_Node* a, jf_Node* b) {
     (*node)->next = NULL;
     (*node)->key = NULL;
     (*node)->key_allocated = JF_FALSE;
+    (*node)->shallow_child = JF_FALSE;
+    (*node)->shallow_list  = JF_FALSE;
 
     return JF_SUCCESS;
 }
@@ -306,7 +309,7 @@ jf_Error jf_diff_alloc_key(jf_DiffNode* node) {
     return JF_SUCCESS;
 }
 
-jf_Error jf_free_diff(jf_DiffNode* diff) {
+jf_Error jf_diff_free(jf_DiffNode* diff) {
     if (!diff) { return JF_NO_REF; }
 
     jf_DiffNode* next   = diff->next;
@@ -315,8 +318,8 @@ jf_Error jf_free_diff(jf_DiffNode* diff) {
 
     jf_Error err;
     
-    if (child)  { err = jf_free_diff(child); }
-    if (next)   { err = jf_free_diff(next);  }
+    if (child && !diff->shallow_child) { err = jf_diff_free(child); }
+    if (next  && !diff->shallow_list)  { err = jf_diff_free(next);  }
     if (diff->key_allocated) { // internally allocated key 
         err = jf_string_free(key);
         jf_free(key);
@@ -367,15 +370,7 @@ jf_Bool jf_diff_updated(jf_DiffNode* diff) {
             return JF_TRUE;
         }
 
-        diff = diff->next;
-    }
-
-    return JF_FALSE;
-}
-
-jf_Bool jf_diff_contains_key(jf_DiffNode* diff, jf_String* key) {
-    while (diff) {
-        if (jf_string_compare(diff->key, key)) {
+        if (diff->child && jf_diff_updated(diff->child)) {
             return JF_TRUE;
         }
 
@@ -383,6 +378,86 @@ jf_Bool jf_diff_contains_key(jf_DiffNode* diff, jf_String* key) {
     }
 
     return JF_FALSE;
+}
+
+jf_Bool jf_diff_match_key(jf_DiffNode* diff, jf_String* key, jf_DiffNode** child) {
+    while (diff && key) {
+        if (jf_string_compare(diff->key, key)) {
+            if (child != NULL) { *child = diff; }
+            return JF_TRUE;
+        }
+
+        diff = diff->next;
+    }
+
+    return JF_FALSE;
+}
+
+jf_Error jf_diff_filter_type(jf_DiffNode** filtered, jf_DiffNode* to_filter, const jf_TreeDiff* types, size_t type_count) {
+    if (!filtered || !to_filter) return JF_NO_REF;
+
+    jf_Error err;
+
+    if ((err = jf_diff_alloc(filtered, NULL, NULL)) != JF_SUCCESS) return err;
+    jf_DiffNode* tail = *filtered;
+    jf_DiffNode* cur = to_filter;
+
+    while (cur) {
+        jf_Bool match = JF_FALSE;
+        
+        for (size_t i = 0; i < type_count; ++i) {
+            if (cur->type == types[i]) {
+                match = JF_TRUE;
+                break;
+            }
+        }
+
+        if (match) {
+            // Allocate a new node
+            jf_DiffNode* new_node;
+            if ((err = jf_diff_alloc(&new_node, cur->node_a, cur->node_b)) != JF_SUCCESS) return err;
+            new_node->type = cur->type;
+            new_node->shallow_child = JF_TRUE;
+            new_node->key = cur->key;
+
+            // Reference the original children without filtering
+            new_node->child = cur->child;
+
+            // Append to filtered list
+            if ((err = jf_diff_attach_next(&tail, new_node)) != JF_SUCCESS) return err;
+        }
+
+        cur = cur->next;
+    }
+
+    return JF_SUCCESS;
+}
+
+jf_Error jf_diff_filter_path(jf_DiffNode* diff, jf_DiffNode** out, jf_String* path, size_t path_len) {
+    if (!diff || !path) return JF_NO_REF;
+
+    jf_Error err;
+    jf_Bool match = JF_FALSE;
+
+    if (path_len > 0) {
+        match = jf_diff_match_key(diff, &path[0], &diff); // sets diff to matched diff
+
+        if (match) {
+            if (path_len > 1) {
+                if (!diff->child) { return JF_SUCCESS; }
+                return jf_diff_filter_path(diff->child, out, &path[1], path_len - 1);
+            } else {
+                if (jf_diff_alloc(out, diff->node_a, diff->node_b)) { return JF_NO_MEM; }
+                (*out)->shallow_child = JF_TRUE;
+                (*out)->shallow_list = JF_TRUE;
+                (*out)->key = diff->key;
+                (*out)->child = diff->child;
+                (*out)->type = diff->type;
+            }
+        }
+    }
+
+    return JF_SUCCESS;
 }
 
 jf_Error jf_compare_object_diff(jf_DiffNode* tail, jf_Object* a, jf_Object* b) {
@@ -420,7 +495,7 @@ jf_Error jf_compare_object_diff(jf_DiffNode* tail, jf_Object* a, jf_Object* b) {
 
         // move to next item in linked list
         jf_DiffNode* diff;
-        if (err = jf_alloc_diff(&diff, a_node, b_node)) { return err; };
+        if (err = jf_diff_alloc(&diff, a_node, b_node)) { return err; };
         if (err = jf_diff_attach_next(&tail, diff))     { return err; };
 
         // assign key
@@ -448,11 +523,11 @@ jf_Error jf_compare_object_diff(jf_DiffNode* tail, jf_Object* a, jf_Object* b) {
 
         // verify keys and match (cannot have dupes)
         if (!match) { a_node = NULL; }
-        else if (jf_diff_contains_key(head, b_key)) { continue; }
+        else if (jf_diff_match_key(head, b_key)) { continue; }
 
         // move to next item in linked list
         jf_DiffNode* diff;
-        if (err = jf_alloc_diff(&diff, a_node, b_node)) { return err; };
+        if (err = jf_diff_alloc(&diff, a_node, b_node)) { return err; };
         if (err = jf_diff_attach_next(&tail, diff)) { return err; };
     
         // assign key
@@ -477,7 +552,7 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
         jf_Node* node_b = b->elements[i];
 
         jf_DiffNode* diff;
-        if (err = jf_alloc_diff(&diff, node_a, node_b)) { return err; }
+        if (err = jf_diff_alloc(&diff, node_a, node_b)) { return err; }
         if (err = jf_diff_alloc_key(diff))              { return err; }
         if (err = jf_string_from_number(diff->key, i))  { return err; }
 
@@ -491,7 +566,7 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
         if (node_a->type == JF_OBJECT) {
             // Recurse into object
             jf_DiffNode* child = NULL;
-            if (err = jf_alloc_diff(&child, NULL, NULL))                                 { return err; };
+            if (err = jf_diff_alloc(&child, NULL, NULL))                                 { return err; };
             if (err = jf_compare_object_diff(child, &node_a->o_value, &node_b->o_value)) { return err; };
 
             diff->child = child;
@@ -503,7 +578,7 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
         if (node_a->type == JF_ARRAY) {
             // Recurse into array
             jf_DiffNode* child = NULL;
-            if (err = jf_alloc_diff(&child, NULL, NULL))                                { return err; };
+            if (err = jf_diff_alloc(&child, NULL, NULL))                                { return err; };
             if (err = jf_compare_array_diff(child, &node_a->a_value, &node_b->a_value)) { return err; };
             if (err = jf_parse_node_layer_diff(child))                                  { return err; };
             diff->child = child;
@@ -524,7 +599,7 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
         jf_Node* node_b = i < b->used ? b->elements[i] : NULL;
 
         jf_DiffNode* diff = NULL;
-        if (err = jf_alloc_diff(&diff, node_a, node_b)) { return err; }
+        if (err = jf_diff_alloc(&diff, node_a, node_b)) { return err; }
         if (err = jf_diff_alloc_key(diff))              { return err; }
         if (err = jf_string_from_number(diff->key, i))  { return err; }
 
@@ -550,7 +625,7 @@ jf_Error jf_one_sided_object_diff(jf_DiffNode* tail, jf_Object* node, jf_TreeDif
         jf_Node* entry_node  = entries[i].value;
 
         jf_DiffNode* child;
-        if (err = jf_alloc_diff(&child, entry_node, NULL)) { return err; } ;
+        if (err = jf_diff_alloc(&child, entry_node, NULL)) { return err; } ;
         child->key = &entries[i].key;
         child->type = type;
 
@@ -576,7 +651,7 @@ jf_Error jf_one_sided_array_diff(jf_DiffNode* tail, jf_Array* array, jf_TreeDiff
         jf_Node* current_node = elements[i];
 
         jf_DiffNode* child;
-        if (err = jf_alloc_diff(&child, current_node, NULL)) { return err; }
+        if (err = jf_diff_alloc(&child, current_node, NULL)) { return err; }
         if (err = jf_diff_alloc_key(child))                  { return err; }
         if (err = jf_string_from_number(child->key, i))      { return err; }
 
@@ -596,7 +671,7 @@ jf_Error jf_recurse_one_sided_nodes(jf_DiffNode* head, jf_Node* reference_node) 
     jf_Error err;
 
     jf_DiffNode* child;
-    if (err = jf_alloc_diff(&child, NULL, NULL)) { return err; };
+    if (err = jf_diff_alloc(&child, NULL, NULL)) { return err; };
 
     // recurse one sided objects
     if (reference_node->type == JF_OBJECT) {
@@ -636,7 +711,7 @@ jf_Error jf_parse_node_layer_diff(jf_DiffNode* head) {
                 jf_Array* array_a = &head->node_a->a_value;
                 jf_Array* array_b = &head->node_b->a_value;
 
-                if (err = jf_alloc_diff(&child, NULL, NULL))              { return err; };
+                if (err = jf_diff_alloc(&child, NULL, NULL))              { return err; };
                 if (err = jf_compare_array_diff(child, array_a, array_b)) { return err; };
                 if (err = jf_diff_attach_child(head, child))              { return err; };
                 head->type = jf_diff_updated(child) ? JF_DIFF_CHANGED : JF_DIFF_STALE;
@@ -651,7 +726,7 @@ jf_Error jf_parse_node_layer_diff(jf_DiffNode* head) {
                 jf_Object* object_a = &head->node_a->o_value;
                 jf_Object* object_b = &head->node_b->o_value;
 
-                if (err = jf_alloc_diff(&child, NULL, NULL))                 { return err; };
+                if (err = jf_diff_alloc(&child, NULL, NULL))                 { return err; };
                 if (err = jf_compare_object_diff(child, object_a, object_b)) { return err; }
                 if (err = jf_diff_attach_child(head, child))                 { return err; }
                 head->type = jf_diff_updated(child) ? JF_DIFF_CHANGED : JF_DIFF_STALE;
@@ -682,22 +757,209 @@ jf_Error jf_parse_node_layer_diff(jf_DiffNode* head) {
     return JF_SUCCESS;
 }
 
+
+
+// TODO fix to allocate timeline & buffers in 1 alloc
+jf_Error jf_timeline_context_alloc(jf_TimelineContext** context, size_t num_entries) {
+    *context = (jf_TimelineContext*) jf_alloc(sizeof(jf_TimelineContext));
+
+    (*context)->files = (jf_String*)    jf_calloc(sizeof(jf_String),    num_entries);
+    (*context)->nodes = (jf_Node**)     jf_calloc(sizeof(jf_Node*),     num_entries);
+    (*context)->diffs = (jf_DiffNode**) jf_calloc(sizeof(jf_DiffNode*), num_entries);
+    (*context)->size = num_entries;
+
+    return JF_SUCCESS;
+}
+
+jf_Error jf_timeline_context_free(jf_TimelineContext* context) {
+    jf_Error error;
+
+    for (int i = 0; i < context->size; ++i) {
+        if (context->nodes[i]) {
+            if (error = jf_node_free(context->nodes[i])) { return error; };
+        }
+    }
+
+    for (int i = 0; i < context->size; ++i) {
+        if (context->diffs[i]) {
+            if (error = jf_diff_free(context->diffs[i])) { return error; };
+        }
+
+        if (&context->files[i]) {
+            if (error = jf_string_free(&context->files[i])) { return error; };
+        }
+    }
+    
+    jf_free(context->files);
+    jf_free(context->nodes);
+    jf_free(context->diffs);
+    jf_free(context);
+
+    return JF_SUCCESS;
+}
+
+// ALLOCATES STRINGS
+jf_Error jf_timeline_context_add_files(jf_TimelineContext* context, const jf_String* files) {
+    jf_Error error;
+
+    for (size_t i = 0; i < context->size; ++i) {
+        if (error = jf_string_alloc(&context->files[i], files[i].str, files[i].len)) { return error; };
+    }
+
+    return JF_SUCCESS;
+}
+
+/*
+    timeine - contains parsed diffs in order
+*/
+
+jf_Error jf_timeline_alloc(jf_Timeline** timeline) {
+    *timeline = (jf_Timeline*) jf_alloc(sizeof(jf_Timeline));
+    
+    (*timeline)->version      = 0;
+    (*timeline)->free_entries = JF_FALSE;
+    (*timeline)->entry        = NULL;
+    (*timeline)->prev         = NULL;
+    (*timeline)->next         = NULL;
+
+    return JF_SUCCESS;
+}
+
+jf_Error jf_timeline_free(jf_Timeline* timeline) {
+    jf_Error err;
+    
+    if (timeline->free_entries && timeline->entry) {
+        if (err = jf_diff_free(timeline->entry)) { return err; }
+    }
+
+    jf_free(timeline);
+
+    jf_Timeline* next = timeline->next;
+    if (next) { return jf_timeline_free(next); }
+
+    return JF_SUCCESS;
+}
+
+// will link the back most node of b to the front most node of a
+jf_Error jf_timeline_attach(jf_Timeline* a, jf_Timeline* b) {
+    if (!a || !b) { return JF_NO_REF; }
+    
+    jf_Timeline* cur_front = a;
+    jf_Timeline* cur_back  = b;
+
+    // find back and front most nodes
+    while (cur_front->next) { cur_front = cur_front->next; }
+    while (cur_back->prev) { cur_back = cur_back->prev; }
+
+    // link nodes front and back
+    cur_front->next = cur_back;
+    cur_back->prev = cur_front;
+    
+    return JF_SUCCESS;
+}
+
+jf_Error jf_timeline_build_from_file_names(jf_Timeline** timeline, jf_TimelineContext* context) {
+    jf_Error err;
+
+    if (!timeline || !context) { return JF_NO_REF; }
+
+    if (err = jf_timeline_alloc(timeline)) { return err; };
+    jf_Timeline* current_timeline = *timeline;
+    
+    for (int i = 0; i < context->size; ++i) {
+        jf_Node* node = NULL;
+        jf_DiffNode* diff = NULL;
+        jf_Timeline* new_timeline = NULL;
+        
+        if (err = jf_parse_from_json_file(&node, context->files[i])) { return err; }
+        if (err = jf_diff_alloc(&diff, NULL, NULL)) { return err; }
+        
+        // first node
+        if (i == 0) {
+            if (err = jf_compare_object_diff(diff, &node->o_value, NULL)) { return err; };
+            
+        // every node after
+        } else {
+            if (err = jf_compare_object_diff(diff, &context->nodes[i - 1]->o_value, &node->o_value)) { return err; };
+            if (err = jf_timeline_alloc(&new_timeline));
+        }
+
+        if (new_timeline != NULL) {
+            if (err = jf_timeline_attach(current_timeline, new_timeline)) { return err; }
+            while (current_timeline->next) {
+                current_timeline = current_timeline->next;
+            }
+        }
+        
+        current_timeline->version = i;
+        current_timeline->entry = diff;
+
+        context->nodes[i] = node;
+        context->diffs[i] = diff;
+    }
+
+    return JF_SUCCESS;
+}
+
+jf_Error jf_timeline_filter_path(jf_Timeline* main_timeline, jf_Timeline** filtered, jf_String* path, size_t path_len) {
+    jf_Error err;
+    if ((err = jf_timeline_alloc(filtered))) return err;
+    (*filtered)->free_entries = JF_TRUE;
+
+    jf_DiffNode* matched = NULL;
+    jf_Timeline* current_filtered = *filtered;
+    jf_Timeline* current_timeline = main_timeline;
+
+    jf_Timeline* last_valid = NULL;
+    size_t num_matches = 0;
+
+    while (current_timeline) {
+        if (err = jf_diff_filter_path(current_timeline->entry, &matched, path, path_len)) { return err; }
+
+        if (matched && jf_diff_updated(matched)) {
+            current_filtered->entry = matched;
+            current_filtered->version = num_matches++;
+
+            // Preemptively allocate next only if another timeline node exists
+            if (current_timeline->next) {
+                jf_Timeline* next_filter;
+                if ((err = jf_timeline_alloc(&next_filter))) return err;
+                next_filter->free_entries = JF_TRUE;
+
+                jf_timeline_attach(current_filtered, next_filter);
+                last_valid = current_filtered;
+                current_filtered = next_filter;
+            }
+        }
+
+        current_timeline = current_timeline->next;
+    }
+
+    // If the last allocated timeline node has no match, free it
+    if (current_filtered && current_filtered->entry == NULL && last_valid) {
+        last_valid->next = NULL;
+        jf_timeline_free(current_filtered);
+    }
+
+    return JF_SUCCESS;
+}
+
 /*
     logging and strings
 */
 
 void jf_print_error(jf_Error err) {
     switch (err) {
-        case (JF_SUCCESS): printf("ERROR: JF_SUCCESS\n"); return;
-        case (JF_NO_MEM): printf("ERROR: JF_NO_MEM\n"); return;
-        case (JF_NO_REF): printf("ERROR: JF_NO_REF\n"); return;
-        case (JF_INDEX_OUT_OF_BOUNDS): printf("ERROR: JF_INDEX_OUT_OF_BOUNDS\n"); return;
-        case (JF_INVALID_SYNTAX): printf("ERROR: JF_INVALID_SYNTAX\n"); return;
-        case (JF_INVALID_ESCAPE): printf("ERROR: JF_INVALID_ESCAPE\n"); return;
-        case (JF_UNEXPECTED_EOF): printf("ERROR: JF_UNEXPECTED_EOF\n"); return;
-        case (JF_INVALID_TYPE): printf("ERROR: JF_INVALID_TYPE\n"); return;
-        case (JF_INVALID_FILE_PATH): printf("ERROR: JF_INVALID_FILE_PATH\n"); return;
-        default: printf("ERROR: UNKNOWN\n"); return;
+        case (JF_SUCCESS): printf("JF-RET: JF_SUCCESS\n"); return;
+        case (JF_NO_MEM): printf("JF-RET: JF_NO_MEM\n"); return;
+        case (JF_NO_REF): printf("JF-RET: JF_NO_REF\n"); return;
+        case (JF_INDEX_OUT_OF_BOUNDS): printf("JF-RET: JF_INDEX_OUT_OF_BOUNDS\n"); return;
+        case (JF_INVALID_SYNTAX): printf("JF-RET: JF_INVALID_SYNTAX\n"); return;
+        case (JF_INVALID_ESCAPE): printf("JF-RET: JF_INVALID_ESCAPE\n"); return;
+        case (JF_UNEXPECTED_EOF): printf("JF-RET: JF_UNEXPECTED_EOF\n"); return;
+        case (JF_INVALID_TYPE): printf("JF-RET: JF_INVALID_TYPE\n"); return;
+        case (JF_INVALID_FILE_PATH): printf("JF-RET: JF_INVALID_FILE_PATH\n"); return;
+        default: printf("JF-RET: UNKNOWN\n"); return;
     }
 }
 
@@ -710,7 +972,21 @@ void jf_print_diff_action(jf_TreeDiff type) {
     }
 }
 
-void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
+jf_TreeDiff jf_match_diff_action(jf_Node* a, jf_Node* b) {
+    if (a && b) { 
+        if (jf_node_compare(a, b)) {
+            return JF_DIFF_STALE; 
+        }
+
+        return JF_DIFF_CHANGED;
+    }
+    if (a) { return JF_DIFF_REMOVED; }
+    if (b) { return JF_DIFF_ADDED; }
+
+    return JF_DIFF_UNKNOWN;
+}
+
+void jf_print_diff_pair(const jf_DiffNode* node, int indent, int count) {
     /*
     +   type: value   
     -   type: value
@@ -722,18 +998,24 @@ void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
 
     // changed
     if (a && b) {
+        jf_TreeDiff action = jf_match_diff_action(node->node_a, node->node_b);
+
         jf_print_diff_action(node->type);
+        // jf_print_diff_action(action);
+
         print_key((node->key) ? node->key->str : "unknown", JF_MAX_NAME_LEN);
         jf_print_indent(indent * count);
 
         // a val
         printf("   %s: ", jf_type_str(a->type));
         jf_print_value_str(a);
-        
-        printf(" -> ");
-        // b val
-        printf("%s: ", jf_type_str(b->type));
-        jf_print_value_str(b);
+    
+        if (action != JF_DIFF_STALE) {
+            printf(" -> ");
+            // b val
+            printf("%s: ", jf_type_str(b->type));
+            jf_print_value_str(b);
+        }
 
         printf("\n");
     }
@@ -741,6 +1023,7 @@ void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
     // removed
     else if (a) {
         jf_print_diff_action(node->type);
+        // jf_print_diff_action(jf_match_diff_action(node->node_a, node->node_b));
         print_key((node->key) ? node->key->str : "unknown", JF_MAX_NAME_LEN);
         jf_print_indent(indent * count);
 
@@ -754,6 +1037,7 @@ void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
     // added
     else if (b) {
         jf_print_diff_action(node->type);
+        // jf_print_diff_action(jf_match_diff_action(node->node_a, node->node_b));
         print_key((node->key) ? node->key->str : "unknown", JF_MAX_NAME_LEN);
         jf_print_indent(indent);
 
@@ -767,7 +1051,7 @@ void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
     // printf("invalid\n");
 }
 
-void jf_print_diff_node(jf_DiffNode* node, int indent, int count) {
+void jf_print_diff_node(const jf_DiffNode* node, int indent, int count) {
     while (node) {
         jf_print_diff_pair(node, indent, count);
 

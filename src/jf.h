@@ -228,6 +228,8 @@ jf_Bool  jf_node_compare(jf_Node* node_a, jf_Node* node_b);
 struct jf_DiffNode {
     jf_TreeDiff type;
     jf_Bool key_allocated;
+    jf_Bool shallow_child;
+    jf_Bool shallow_list;
 
     jf_String* key;
     jf_Node* node_a; // val A
@@ -237,13 +239,17 @@ struct jf_DiffNode {
     jf_DiffNode* next;  // linked list to next node in B tree
 };
 
-jf_Error jf_alloc_diff(jf_DiffNode** node, jf_Node* a, jf_Node* b);
+jf_Error jf_diff_alloc(jf_DiffNode** node, jf_Node* a, jf_Node* b);
 
 jf_Error jf_diff_alloc_key(jf_DiffNode* node);
 
-jf_Error jf_free_diff(jf_DiffNode* diff);
+jf_Error jf_diff_free(jf_DiffNode* diff);
 
 jf_Error jf_force_diff_state(jf_DiffNode* head, jf_TreeDiff state);
+
+jf_Error jf_diff_filter_type(jf_DiffNode** filtered, jf_DiffNode* to_filter, const jf_TreeDiff* types, size_t type_count);
+
+jf_Error jf_diff_filter_path(jf_DiffNode* diff, jf_DiffNode** out, jf_String* path, size_t path_len);
 
 jf_Error jf_diff_attach_child(jf_DiffNode* head, jf_DiffNode* child);
 
@@ -251,7 +257,7 @@ jf_Error jf_diff_attach_next(jf_DiffNode** head, jf_DiffNode* next);
 
 jf_Bool jf_diff_updated(jf_DiffNode* diff);
 
-jf_Bool jf_diff_contains_key(jf_DiffNode* diff, jf_String* key);
+jf_Bool jf_diff_match_key(jf_DiffNode* diff, jf_String* key, jf_DiffNode** child = NULL);
 
 jf_Error jf_compare_object_diff(jf_DiffNode* tail, jf_Object* a, jf_Object* b);
 
@@ -264,6 +270,45 @@ jf_Error jf_one_sided_array_diff(jf_DiffNode* head, jf_Array* array, jf_TreeDiff
 jf_Error jf_recurse_one_sided_nodes(jf_DiffNode* head, jf_Node* reference_node);
 
 jf_Error jf_parse_node_layer_diff(jf_DiffNode* head);
+
+
+struct jf_TimelineContext {
+    size_t size;
+
+    jf_String* files;
+    jf_Node** nodes;
+    jf_DiffNode** diffs;
+};
+
+jf_Error jf_timeline_context_alloc(jf_TimelineContext** context, size_t num_entries);
+
+jf_Error jf_timeline_context_free(jf_TimelineContext* context);
+
+jf_Error jf_timeline_context_add_files(jf_TimelineContext* context, const jf_String* files);
+
+/*
+    timeine - contains parsed diffs in order
+*/
+
+struct jf_Timeline {
+    size_t version;
+    jf_Bool free_entries;
+
+    jf_DiffNode* entry;
+    jf_Timeline* prev;
+    jf_Timeline* next;
+};
+
+jf_Error jf_timeline_alloc(jf_Timeline** timeline);
+
+jf_Error jf_timeline_free(jf_Timeline* timeline);
+
+// will link the back most node of b to the front most node of a
+jf_Error jf_timeline_attach(jf_Timeline* a, jf_Timeline* b);
+
+jf_Error jf_timeline_build_from_file_names(jf_Timeline** timeline, jf_TimelineContext* context);
+
+jf_Error jf_timeline_filter_path(jf_Timeline* main_timeline, jf_Timeline** filtered, jf_String* path, size_t path_len);
 
 
 /*
@@ -284,8 +329,8 @@ void print_key(const char* key, size_t fixed_len);
 
 void jf_print_value_str(jf_Node* node);
 
-void jf_print_diff_pair(jf_DiffNode* node, int indent, int count);
+void jf_print_diff_pair(const jf_DiffNode* node, int indent, int count);
 
-void jf_print_diff_node(jf_DiffNode* node, int indent, int count = 1);
+void jf_print_diff_node(const jf_DiffNode* node, int indent, int count = 1);
 
 #endif

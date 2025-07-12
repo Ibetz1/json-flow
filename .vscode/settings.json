@@ -15,6 +15,9 @@
         "filesystem": "cpp",
         "ostream": "cpp",
         "xlocale": "cpp",
-        "xlocmon": "cpp"
+        "xlocmon": "cpp",
+        "iterator": "cpp",
+        "xhash": "cpp",
+        "xtree": "cpp"
     }
 }
