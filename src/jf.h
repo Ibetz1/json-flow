@@ -11,6 +11,7 @@
 #include "stdio.h"
 #include <cstdlib>
 
+
 /*
     logging
 */
@@ -98,6 +99,7 @@
 #define JF_STRING(str, size) { (char*) str, size }
 #define JF_STRING_STATIC(str) { (char*) str, sizeof(str) }
 #define JF_STRING_CONST(str) { (char*) str, strlen(str) }
+#define JF_STRING_MAX_NUMBER 0x20
 
 typedef double jf_Number;
 struct jf_Node;
@@ -141,12 +143,15 @@ enum jf_Bool {
 struct jf_String {
     char* str;
     size_t len;
+    jf_Bool allocated;
 };
 
 jf_Error jf_string_alloc(jf_String* str, const char* data, size_t len);
 jf_Error jf_string_free(jf_String* str);
 jf_Bool  jf_string_compare(jf_String* str_a, jf_String* str_b);
 jf_Error jf_string_copy(jf_String* str_a, jf_String* str_b);
+jf_Error jf_string_from_number(jf_String* str, double num);
+
 
 /*
     assigns a key to a node
@@ -182,6 +187,8 @@ struct jf_Array { // fixed allocator
 
 jf_Error jf_array_alloc(jf_Array* array, size_t size);
 jf_Error jf_array_free(jf_Array* array);
+jf_Bool  jf_array_compare(jf_Array* a, jf_Array* b);
+jf_Bool  jf_array_contains(jf_Array* arr, jf_Node* val);
 
 /*
     generic json type
@@ -202,5 +209,13 @@ struct jf_Node {
 
 jf_Error jf_node_alloc(jf_Node** obj);
 jf_Error jf_node_free(jf_Node* obj);
+jf_Bool  jf_node_compare(jf_Node* node_a, jf_Node* node_b);
+
+/*
+    logging
+*/
+void jf_print_value_str(jf_Node* node);
+
+void jf_print_error(jf_Error err);
 
 #endif

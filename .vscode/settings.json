@@ -2,6 +2,18 @@
     "files.associations": {
         "xmemory": "cpp",
         "sstream": "cpp",
-        "chrono": "cpp"
+        "chrono": "cpp",
+        "xutility": "cpp",
+        "xiosbase": "cpp",
+        "algorithm": "cpp",
+        "functional": "cpp",
+        "optional": "cpp",
+        "system_error": "cpp",
+        "type_traits": "cpp",
+        "xtr1common": "cpp",
+        "any": "cpp",
+        "filesystem": "cpp",
+        "ostream": "cpp",
+        "xlocale": "cpp"
     }
 }
