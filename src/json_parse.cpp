@@ -86,8 +86,8 @@ jf_Error build_array(const json& j_arr, jf_Array* out_arr) {
     return JF_SUCCESS;
 }
 
-jf_Error jf_parse_from_json_file(jf_Node** node, const char* path) {
-    FILE* f = fopen(path, "rb");
+jf_Error jf_parse_from_json_file(jf_Node** node, jf_String path) {
+    FILE* f = fopen(path.str, "rb");
     if (!f) {
         perror("fopen");
         return JF_INVALID_FILE_PATH;

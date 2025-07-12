@@ -100,6 +100,7 @@
 #define JF_STRING_STATIC(str) { (char*) str, sizeof(str) }
 #define JF_STRING_CONST(str) { (char*) str, strlen(str) }
 #define JF_STRING_MAX_NUMBER 0x20
+#define JF_MAX_NAME_LEN      0x10
 
 typedef double jf_Number;
 struct jf_Node;
@@ -107,6 +108,7 @@ struct jf_KeyValue;
 struct jf_Object;
 struct jf_Array;
 struct jf_String;
+struct jf_DiffNode;
 
 /*
     types
@@ -129,12 +131,19 @@ enum jf_Error {
     JF_INVALID_ESCAPE,
     JF_UNEXPECTED_EOF,
     JF_INVALID_TYPE,
-    JF_INVALID_FILE_PATH
+    JF_INVALID_FILE_PATH,
 };
 
 enum jf_Bool {
     JF_FALSE,
     JF_TRUE
+};
+
+enum jf_TreeDiff {
+    JF_DIFF_STALE,   // unchanged between two trees
+    JF_DIFF_ADDED,   // key appears in tree b but not tree a
+    JF_DIFF_REMOVED, // key appears in tree a but not tree b
+    JF_DIFF_CHANGED  // value @ key is different between tree 1 and tree 2
 };
 
 /*
@@ -212,10 +221,67 @@ jf_Error jf_node_free(jf_Node* obj);
 jf_Bool  jf_node_compare(jf_Node* node_a, jf_Node* node_b);
 
 /*
-    logging
+    diffing (timeline comparisons)
 */
+
+struct jf_DiffNode {
+    jf_TreeDiff type;
+    jf_Bool key_allocated;
+
+    jf_String* key;
+    jf_Node* node_a; // val A
+    jf_Node* node_b; // val B
+
+    jf_DiffNode* child; // linked list containing the dif of a child node
+    jf_DiffNode* next;  // linked list to next node in B tree
+};
+
+jf_Error jf_alloc_diff(jf_DiffNode** node, jf_Node* a, jf_Node* b);
+
+jf_Error jf_diff_alloc_key(jf_DiffNode* node);
+
+jf_Error jf_free_diff(jf_DiffNode* diff);
+
+jf_Error jf_diff_attach_child(jf_DiffNode* head, jf_DiffNode* child);
+
+jf_Error jf_diff_attach_next(jf_DiffNode** head, jf_DiffNode* next);
+
+jf_Bool jf_diff_updated(jf_DiffNode* diff);
+
+jf_Bool jf_diff_contains_key(jf_DiffNode* diff, jf_String* key);
+
+jf_Error jf_compare_object_diff(jf_DiffNode* tail, jf_Object* a, jf_Object* b);
+
+jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b);
+
+jf_Error jf_one_sided_object_diff(jf_DiffNode* head, jf_Object* node, jf_TreeDiff type);
+
+jf_Error jf_one_sided_array_diff(jf_DiffNode* head, jf_Array* array, jf_TreeDiff type);
+
+jf_Error jf_recurse_one_sided_nodes(jf_DiffNode* head, jf_Node* reference_node);
+
+jf_Error jf_parse_node_layer_diff(jf_DiffNode* head);
+
+/*
+    logging & strings
+*/
+
+const char* jf_diff_type_str(jf_TreeDiff diff);
+
+const char* jf_type_str(jf_Type node);
+
 void jf_print_value_str(jf_Node* node);
 
 void jf_print_error(jf_Error err);
+
+void jf_print_indent(int depth);
+
+void print_key(const char* key, size_t fixed_len);
+
+void jf_print_value_str(jf_Node* node);
+
+void jf_print_diff_pair(jf_DiffNode* node, int indent, int count);
+
+void jf_print_diff_node(jf_DiffNode* node, int indent, int count = 1);
 
 #endif

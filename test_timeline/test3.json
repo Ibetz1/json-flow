@@ -6,7 +6,6 @@
   "stats": {
     "score": 1876.45,
     "rank": "Platinum",
-    "active": true,
     "last_login": "2025-07-09T18:42:31Z"
   },
   "skills": [
@@ -14,7 +13,6 @@
     "Embedded Systems",
     "Reverse Engineering",
     "Graphics",
-    "OpenGL",
     "Parsing",
     [
       1,
@@ -25,7 +23,6 @@
   "projects": [
     {
       "title": "Json Flow",
-      "language": "C/C++",
       "completed": false,
       "dependencies": ["imgui", "custom_allocator", "timeline"]
     },
@@ -35,7 +32,6 @@
       "completed": true,
       "features": {
         "input_remap": true,
-        "viGEm_support": true,
         "configurable": true,
         "size": 2048
       }
@@ -47,17 +43,20 @@
     42,
     -13,
     3.14159,
-    6.022e23,
-    -2.99792458e8,
-    0
+    -2.99792458e8
   ],
   "flags": {
-    "experimental": false,
     "debug_mode": true,
     "verbose": false,
     "features": {
       "featureA": true,
       "featureB": false
-    }
-  }
+    },
+    "testing": [
+      1,2,3,4
+    ]
+  },
+  "testingagain": [
+    1,2,3,4
+  ]
 }

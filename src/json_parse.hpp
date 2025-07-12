@@ -12,6 +12,6 @@ jf_Error build_object(const json& j_obj, jf_Object* out_obj);
 
 jf_Error build_array(const json& j_arr, jf_Array* out_arr);
 
-jf_Error jf_parse_from_json_file(jf_Node** node, const char* path);
+jf_Error jf_parse_from_json_file(jf_Node** node, jf_String path);
 
 #endif
