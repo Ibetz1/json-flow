@@ -67,6 +67,8 @@ jf_Error jf_timeline_build_from_node_name(jf_Timeline* timeline, jf_String name)
     return JF_SUCCESS;
 }
 
+
+
 int main() {
     jf_Error err;
 
@@ -89,9 +91,10 @@ int main() {
 
     jf_DiffNode* diff;
     jf_print_error(jf_alloc_diff(&diff, NULL, NULL));
-    jf_print_error(jf_compare_object_diff(diff, &node_1->o_value, NULL));
-    // jf_print_error(jf_parse_node_layer_diff(diff));
-
+    jf_print_error(jf_compare_object_diff(diff, &node_1->o_value,&node_2->o_value));
+    // jf_print_error(jf_compare_object_diff(diff, &node_1->o_value, NULL));
+    // jf_print_error(jf_compare_object_diff(diff, NULL, &node_1->o_value));
+    
     jf_print_diff_node(diff, 2);
 
     printf("finished\n");

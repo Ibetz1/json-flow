@@ -143,7 +143,8 @@ enum jf_TreeDiff {
     JF_DIFF_STALE,   // unchanged between two trees
     JF_DIFF_ADDED,   // key appears in tree b but not tree a
     JF_DIFF_REMOVED, // key appears in tree a but not tree b
-    JF_DIFF_CHANGED  // value @ key is different between tree 1 and tree 2
+    JF_DIFF_CHANGED, // value @ key is different between tree 1 and tree 2
+    JF_DIFF_UNKNOWN
 };
 
 /*
@@ -242,6 +243,8 @@ jf_Error jf_diff_alloc_key(jf_DiffNode* node);
 
 jf_Error jf_free_diff(jf_DiffNode* diff);
 
+jf_Error jf_force_diff_state(jf_DiffNode* head, jf_TreeDiff state);
+
 jf_Error jf_diff_attach_child(jf_DiffNode* head, jf_DiffNode* child);
 
 jf_Error jf_diff_attach_next(jf_DiffNode** head, jf_DiffNode* next);
@@ -261,6 +264,7 @@ jf_Error jf_one_sided_array_diff(jf_DiffNode* head, jf_Array* array, jf_TreeDiff
 jf_Error jf_recurse_one_sided_nodes(jf_DiffNode* head, jf_Node* reference_node);
 
 jf_Error jf_parse_node_layer_diff(jf_DiffNode* head);
+
 
 /*
     logging & strings

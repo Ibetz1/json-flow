@@ -327,6 +327,22 @@ jf_Error jf_free_diff(jf_DiffNode* diff) {
     return err;
 }
 
+jf_Error jf_force_diff_state(jf_DiffNode* head, jf_TreeDiff state) {
+    jf_Error err;
+
+    while (head) {
+        head->type = state;
+
+        if (head->child) {
+            if (err = jf_force_diff_state(head->child, state)) { return err; }
+        }
+
+        head = head->next;
+    }
+
+    return JF_SUCCESS;
+}
+
 jf_Error jf_diff_attach_child(jf_DiffNode* head, jf_DiffNode* child) {
 
     if (head->child) {
@@ -370,13 +386,10 @@ jf_Bool jf_diff_contains_key(jf_DiffNode* diff, jf_String* key) {
 }
 
 jf_Error jf_compare_object_diff(jf_DiffNode* tail, jf_Object* a, jf_Object* b) {
-    if (!a || !tail) {
-        return JF_NO_REF;
-    }
+    if (!tail || (a == NULL && b == NULL)) { return JF_NO_REF; }
 
-    if (b == NULL) {
-        return jf_one_sided_object_diff(tail, a, JF_DIFF_ADDED);
-    }
+    if (b == NULL) { return jf_one_sided_object_diff(tail, a, JF_DIFF_ADDED); }
+    if (a == NULL) { return jf_one_sided_object_diff(tail, b, JF_DIFF_REMOVED); }
 
     jf_Error err;
     jf_DiffNode* head = tail;
@@ -467,9 +480,8 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
         if (err = jf_alloc_diff(&diff, node_a, node_b)) { return err; }
         if (err = jf_diff_alloc_key(diff))              { return err; }
         if (err = jf_string_from_number(diff->key, i))  { return err; }
-        
-        tail->next = diff;
-        tail = diff;
+
+        jf_diff_attach_next(&tail, diff);
         
         if (node_a->type != node_b->type) {
             diff->type = JF_DIFF_CHANGED;
@@ -481,7 +493,6 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
             jf_DiffNode* child = NULL;
             if (err = jf_alloc_diff(&child, NULL, NULL))                                 { return err; };
             if (err = jf_compare_object_diff(child, &node_a->o_value, &node_b->o_value)) { return err; };
-            // if (err = jf_parse_node_layer_diff(child))                                   { return err; };
 
             diff->child = child;
             diff->type = jf_diff_updated(child) ? JF_DIFF_CHANGED : JF_DIFF_STALE;
@@ -495,8 +506,8 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
             if (err = jf_alloc_diff(&child, NULL, NULL))                                { return err; };
             if (err = jf_compare_array_diff(child, &node_a->a_value, &node_b->a_value)) { return err; };
             if (err = jf_parse_node_layer_diff(child))                                  { return err; };
-
             diff->child = child;
+
             diff->type = jf_diff_updated(child) ? JF_DIFF_CHANGED : JF_DIFF_STALE;
             continue;
         }
@@ -526,10 +537,11 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
     return JF_SUCCESS;
 }
 
-jf_Error jf_one_sided_object_diff(jf_DiffNode* head, jf_Object* node, jf_TreeDiff type) {
-    if (!head || !node) { return JF_NO_REF; }
+jf_Error jf_one_sided_object_diff(jf_DiffNode* tail, jf_Object* node, jf_TreeDiff type) {
+    if (!tail || !node) { return JF_NO_REF; }
 
     jf_Error err;
+    jf_DiffNode* head = tail;
     jf_KeyValue* entries = node->entries;
     size_t count = node->used;
 
@@ -540,20 +552,25 @@ jf_Error jf_one_sided_object_diff(jf_DiffNode* head, jf_Object* node, jf_TreeDif
         jf_DiffNode* child;
         if (err = jf_alloc_diff(&child, entry_node, NULL)) { return err; } ;
         child->key = &entries[i].key;
+        child->type = type;
 
         if (err = jf_parse_node_layer_diff(child)) { return err; }
-        jf_diff_attach_next(&head, child);
+
+        jf_diff_attach_next(&tail, child);
     }
 
+    jf_force_diff_state(head, type);
     return JF_SUCCESS;
 }
 
-jf_Error jf_one_sided_array_diff(jf_DiffNode* head, jf_Array* array, jf_TreeDiff type) {
-    if (!head || !array) { return JF_NO_REF; }
+jf_Error jf_one_sided_array_diff(jf_DiffNode* tail, jf_Array* array, jf_TreeDiff type) {
+    if (!tail || !array) { return JF_NO_REF; }
 
     jf_Error err;
+    jf_DiffNode* head = tail;
     jf_Node** elements = array->elements;
     size_t used = array->used;
+
 
     for (size_t i = 0; i < used; ++i) {
         jf_Node* current_node = elements[i];
@@ -565,9 +582,10 @@ jf_Error jf_one_sided_array_diff(jf_DiffNode* head, jf_Array* array, jf_TreeDiff
 
         jf_parse_node_layer_diff(child);
 
-        jf_diff_attach_next(&head, child);
+        jf_diff_attach_next(&tail, child);
     }
 
+    jf_force_diff_state(head, type);
     return JF_SUCCESS;
 }
 
@@ -592,6 +610,7 @@ jf_Error jf_recurse_one_sided_nodes(jf_DiffNode* head, jf_Node* reference_node) 
         { return err; }
     }
 
+    // if (err = jf_force_diff_state(head, head->type)) { return err; }
     if (err = jf_diff_attach_child(head, child)) { return err; }
 
     return JF_SUCCESS;
@@ -606,6 +625,7 @@ jf_Error jf_parse_node_layer_diff(jf_DiffNode* head) {
         if (head->node_a && head->node_b) {
             if (head->node_a->type != head->node_b->type) {
                 head->type = JF_DIFF_CHANGED;
+
                 goto next;
             }
 
@@ -633,7 +653,6 @@ jf_Error jf_parse_node_layer_diff(jf_DiffNode* head) {
 
                 if (err = jf_alloc_diff(&child, NULL, NULL))                 { return err; };
                 if (err = jf_compare_object_diff(child, object_a, object_b)) { return err; }
-                // if (err = jf_parse_node_layer_diff(child))                   { return err; }
                 if (err = jf_diff_attach_child(head, child))                 { return err; }
                 head->type = jf_diff_updated(child) ? JF_DIFF_CHANGED : JF_DIFF_STALE;
 
@@ -647,13 +666,13 @@ jf_Error jf_parse_node_layer_diff(jf_DiffNode* head) {
 
         // current layer key comparison
         if (head->node_a) { 
-            head->type = JF_DIFF_REMOVED; 
-            jf_recurse_one_sided_nodes(head, head->node_a);
+            head->type = JF_DIFF_REMOVED;
+            jf_recurse_one_sided_nodes(head, head->node_a); 
         }
 
         if (head->node_b) { 
             head->type = JF_DIFF_ADDED;
-            jf_recurse_one_sided_nodes(head, head->node_b);
+            jf_recurse_one_sided_nodes(head, head->node_b); 
         }
 
         next:
@@ -682,6 +701,15 @@ void jf_print_error(jf_Error err) {
     }
 }
 
+void jf_print_diff_action(jf_TreeDiff type) {
+    switch (type) {
+        case (JF_DIFF_ADDED)   : printf("+ "); break;
+        case (JF_DIFF_REMOVED) : printf("- "); break;
+        case (JF_DIFF_STALE)   : printf("  "); break;
+        case (JF_DIFF_CHANGED) : printf("? "); break;
+    }
+}
+
 void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
     /*
     +   type: value   
@@ -694,11 +722,7 @@ void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
 
     // changed
     if (a && b) {
-        if (node->type != JF_DIFF_STALE) {
-            printf("? ");
-        } else {
-            printf("  ");
-        }
+        jf_print_diff_action(node->type);
         print_key((node->key) ? node->key->str : "unknown", JF_MAX_NAME_LEN);
         jf_print_indent(indent * count);
 
@@ -715,8 +739,8 @@ void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
     }
 
     // removed
-    else if (a && !b) {
-        printf("- ");
+    else if (a) {
+        jf_print_diff_action(node->type);
         print_key((node->key) ? node->key->str : "unknown", JF_MAX_NAME_LEN);
         jf_print_indent(indent * count);
 
@@ -728,8 +752,8 @@ void jf_print_diff_pair(jf_DiffNode* node, int indent, int count) {
     }
 
     // added
-    else if (!a && b) {
-        printf("+ ");
+    else if (b) {
+        jf_print_diff_action(node->type);
         print_key((node->key) ? node->key->str : "unknown", JF_MAX_NAME_LEN);
         jf_print_indent(indent);
 
