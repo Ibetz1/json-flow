@@ -192,12 +192,10 @@ jf_Bool jf_array_compare(jf_Array* a, jf_Array* b) {
 
     for (size_t i = 0; i < a->used; ++i) {
         if (a->elements[i]->type != b->elements[i]->type) {
-            printf("array cmp failed 0\n");
             return JF_FALSE;
         }
 
         if (!jf_node_compare(a->elements[i], b->elements[i])) {
-            printf("array cmp failed 1\n");
             return JF_FALSE;
         }
     }
@@ -405,10 +403,14 @@ jf_Error jf_diff_filter_type(jf_DiffNode** filtered, jf_DiffNode* to_filter, con
     while (cur) {
         jf_Bool match = JF_FALSE;
         
-        for (size_t i = 0; i < type_count; ++i) {
-            if (cur->type == types[i]) {
-                match = JF_TRUE;
-                break;
+        if (cur->type == JF_DIFF_UNKNOWN) {
+            jf_Bool match = JF_TRUE;
+        } else {
+            for (size_t i = 0; i < type_count; ++i) {
+                if (cur->type == types[i]) {
+                    match = JF_TRUE;
+                    break;
+                }
             }
         }
 
@@ -568,8 +570,9 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
             jf_DiffNode* child = NULL;
             if (err = jf_diff_alloc(&child, NULL, NULL))                                 { return err; };
             if (err = jf_compare_object_diff(child, &node_a->o_value, &node_b->o_value)) { return err; };
-
             diff->child = child;
+            // jf_diff_attach_child(diff, child);
+
             diff->type = jf_diff_updated(child) ? JF_DIFF_CHANGED : JF_DIFF_STALE;
 
             continue;
@@ -581,6 +584,8 @@ jf_Error jf_compare_array_diff(jf_DiffNode* tail, jf_Array* a, jf_Array* b) {
             if (err = jf_diff_alloc(&child, NULL, NULL))                                { return err; };
             if (err = jf_compare_array_diff(child, &node_a->a_value, &node_b->a_value)) { return err; };
             if (err = jf_parse_node_layer_diff(child))                                  { return err; };
+            // jf_diff_attach_child(diff, child);
+            
             diff->child = child;
 
             diff->type = jf_diff_updated(child) ? JF_DIFF_CHANGED : JF_DIFF_STALE;
@@ -645,7 +650,6 @@ jf_Error jf_one_sided_array_diff(jf_DiffNode* tail, jf_Array* array, jf_TreeDiff
     jf_DiffNode* head = tail;
     jf_Node** elements = array->elements;
     size_t used = array->used;
-
 
     for (size_t i = 0; i < used; ++i) {
         jf_Node* current_node = elements[i];
