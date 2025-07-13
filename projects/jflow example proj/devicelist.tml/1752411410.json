@@ -1,0 +1,7 @@
+{
+  "devices": [
+    {"id": "dev-001", "type": "sensor", "online": true},
+    {"id": "dev-002", "type": "relay", "online": false},
+    {"id": "dev-003", "type": "camera", "online": true}
+  ]
+}

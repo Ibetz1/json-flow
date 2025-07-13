@@ -1,0 +1,9 @@
+{
+  "data": [
+    {"label": "Jan", "value": 42},
+    {"label": "Feb", "value": 38},
+    {"label": "Mar", "value": 50},
+    {"label": "Mar", "value": 50}
+  ],
+  "average": 112
+}

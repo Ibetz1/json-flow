@@ -1,0 +1,27 @@
+{
+    "project_folders": {},
+    "project_name": "pick a project",
+    "project_path": "./",
+    "selected_name": "pick a timeline",
+    "selected_path": "",
+    "tracked_files": [
+        "./timelines\\test.tml\\1.json",
+        "./projects\\jflow example proj\\uerprofile.tml\\1752390646.json",
+        "./timelines\\test.tml\\2.json",
+        "./timelines\\test.tml\\3.json",
+        "./timelines\\config.tml\\4.json",
+        "./.vscode\\c_cpp_properties.json",
+        "./projects\\jflow example proj\\project.json",
+        "./.vscode\\settings.json"
+    ],
+    "tracked_hashes": {
+        "./.vscode\\c_cpp_properties.json": "32417724d8f96d3d",
+        "./.vscode\\settings.json": "33d7ccdb008e0ff6",
+        "./projects\\jflow example proj\\project.json": "61ea0fa708dcf634",
+        "./projects\\jflow example proj\\uerprofile.tml\\1752390646.json": "8f44b07b5901a25",
+        "./timelines\\config.tml\\4.json": "258f011a8ca09262",
+        "./timelines\\test.tml\\1.json": "cd5e9d744355c99",
+        "./timelines\\test.tml\\2.json": "de816703f9f62495",
+        "./timelines\\test.tml\\3.json": "86015b9de11ac8de"
+    }
+}

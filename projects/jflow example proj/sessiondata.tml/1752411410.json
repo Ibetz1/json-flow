@@ -1,0 +1,10 @@
+{
+  "sessionId": "a8f1c6b2",
+  "start": "2025-07-11T00:00:00Z",
+  "end": null,
+  "events": [
+    {"type": "open", "target": "Config.json"},
+    {"type": "scroll", "position": 69},
+    {"type": "select", "node": "objectvar.arrayvar[1]"}
+  ]
+}

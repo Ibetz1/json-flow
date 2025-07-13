@@ -1,0 +1,9 @@
+{
+  "appName": "JsonFlow",
+  "version": "1.0.6",
+  "debug": false,
+  "features": {
+    "timeline": true,
+    "diffing": true
+  }
+}

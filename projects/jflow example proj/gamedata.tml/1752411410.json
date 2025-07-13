@@ -1,0 +1,9 @@
+{
+  "level": 7,
+  "score": 45200,
+  "unlocked": ["map1", "map2", "map3"],
+  "inventory": {
+    "coins": 230,
+    "items": ["sword", "shield", "potion", "boat"]
+  }
+}

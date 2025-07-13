@@ -1,0 +1,47 @@
+{
+    "last_file_count": 11,
+    "originating_path": "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj",
+    "project_folders": {
+        "chartdata.tml": "./projects/jflow example proj\\chartdata.tml",
+        "config.tml": "./projects/jflow example proj\\config.tml",
+        "devicelist.tml": "./projects/jflow example proj\\devicelist.tml",
+        "gamedata.tml": "./projects/jflow example proj\\gamedata.tml",
+        "logentry.tml": "./projects/jflow example proj\\logentry.tml",
+        "projectmeta.tml": "./projects/jflow example proj\\projectmeta.tml",
+        "serversettings.tml": "./projects/jflow example proj\\serversettings.tml",
+        "sessiondata.tml": "./projects/jflow example proj\\sessiondata.tml",
+        "test.tml": "./projects/jflow example proj/test.tml",
+        "translation.tml": "./projects/jflow example proj\\translation.tml",
+        "uerprofile.tml": "./projects/jflow example proj\\uerprofile.tml"
+    },
+    "project_name": "jflow example proj",
+    "project_path": "./projects/jflow example proj",
+    "selected_name": "config.tml",
+    "selected_path": "./projects/jflow example proj\\config.tml",
+    "tracked_files": [
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\config.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\game\\gamedata.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\game\\projectmeta.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\chartdata.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\devicelist.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\logentry.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\serversettings.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\session\\sessiondata.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\session\\translation.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\test.json",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\uerprofile.json"
+    ],
+    "tracked_hashes": {
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\config.json": "d9828fc6d3538f6c",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\game\\gamedata.json": "7ebca436513bf7f0",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\game\\projectmeta.json": "1a11e5550b3f4dab",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\chartdata.json": "3158fb1b284d4eef",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\devicelist.json": "7bff34290d4d2085",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\logentry.json": "3283b435578eda05",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\serversettings.json": "6c3584d56855dd4a",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\session\\sessiondata.json": "7293523caadf37f2",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\server\\session\\translation.json": "e4521ba38ee995ae",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\test.json": "8f44b07b5901a25",
+        "C:\\Users\\Ianbe.IANSPC\\Desktop\\jflow example proj\\uerprofile.json": "1ee9b4e566515d32"
+    }
+}

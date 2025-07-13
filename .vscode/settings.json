@@ -89,6 +89,17 @@
         "memory_resource": "cpp",
         "string_view": "cpp",
         "text_encoding": "cpp",
-        "cinttypes": "cpp"
-    }
+        "cinttypes": "cpp",
+        "iostream": "cpp",
+        "fstream": "cpp",
+        "bitset": "cpp",
+        "coroutine": "cpp",
+        "resumable": "cpp",
+        "future": "cpp",
+        "regex": "cpp",
+        "unordered_set": "cpp"
+    },
+    "C_Cpp.codeAnalysis.clangTidy.checks.disabled": [
+        "clang-diagnostic-error"
+    ]
 }

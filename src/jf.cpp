@@ -314,7 +314,7 @@ jf_Error jf_diff_free(jf_DiffNode* diff) {
     jf_DiffNode* child  = diff->child;
     jf_String*   key    = diff->key;
 
-    jf_Error err;
+    jf_Error err = JF_SUCCESS;
     
     if (child && !diff->shallow_child) { err = jf_diff_free(child); }
     if (next  && !diff->shallow_list)  { err = jf_diff_free(next);  }
@@ -832,14 +832,16 @@ jf_Error jf_timeline_alloc(jf_Timeline** timeline) {
 jf_Error jf_timeline_free(jf_Timeline* timeline) {
     jf_Error err;
     
-    if (timeline->free_entries && timeline->entry) {
+    if (timeline->free_entries && timeline->entry != NULL) {
         if (err = jf_diff_free(timeline->entry)) { return err; }
     }
-
-    jf_free(timeline);
-
+    
     jf_Timeline* next = timeline->next;
-    if (next) { return jf_timeline_free(next); }
+    jf_free(timeline);
+    if (next) { 
+        printf("free timeline next\n");
+        return jf_timeline_free(next); 
+    }
 
     return JF_SUCCESS;
 }
@@ -911,6 +913,7 @@ jf_Error jf_timeline_filter_path(jf_Timeline* main_timeline, jf_Timeline** filte
     (*filtered)->free_entries = JF_TRUE;
 
     jf_DiffNode* matched = NULL;
+    jf_DiffNode* previous_matched = NULL;
     jf_Timeline* current_filtered = *filtered;
     jf_Timeline* current_timeline = main_timeline;
 
@@ -918,13 +921,19 @@ jf_Error jf_timeline_filter_path(jf_Timeline* main_timeline, jf_Timeline** filte
     size_t num_matches = 0;
 
     while (current_timeline) {
-        if (err = jf_diff_filter_path(current_timeline->entry, &matched, path, path_len)) { return err; }
+        // Free the previous matched diff node if it wasn't attached
+        if (previous_matched) {
+            jf_diff_free(previous_matched);
+            previous_matched = NULL;
+        }
+
+        if (err = jf_diff_filter_path(current_timeline->entry, &matched, path, path_len)) return err;
 
         if (matched && jf_diff_updated(matched)) {
             current_filtered->entry = matched;
             current_filtered->version = num_matches++;
+            previous_matched = NULL; // it has been stored
 
-            // Preemptively allocate next only if another timeline node exists
             if (current_timeline->next) {
                 jf_Timeline* next_filter;
                 if ((err = jf_timeline_alloc(&next_filter))) return err;
@@ -934,9 +943,18 @@ jf_Error jf_timeline_filter_path(jf_Timeline* main_timeline, jf_Timeline** filte
                 last_valid = current_filtered;
                 current_filtered = next_filter;
             }
+        } else {
+            // matched was unused, store to be freed
+            previous_matched = matched;
         }
 
+        matched = NULL;
         current_timeline = current_timeline->next;
+    }
+
+    // Cleanup final unmatched node
+    if (previous_matched) {
+        jf_diff_free(previous_matched);
     }
 
     // If the last allocated timeline node has no match, free it

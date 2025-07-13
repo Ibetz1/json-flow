@@ -1,3 +1,19 @@
+/*
+    Ian Betz
+    7/13/2025
+    ianbetz.22.4@gmail.com
+
+    fair warning to all potential readers of this source code,
+    this abomination was written on a 35+ hour coding bender, 
+    read at your own discretion.
+    
+    trying to understand the diff parser, ui code, or file system could lead to the following symptoms:
+        - severe brain damage
+        - time dilation
+        - death
+
+    YOU HAVE BEEN WARNED!
+*/
 
 #include "platform/tinyfiledialogs.h"
 #include "jf.h"
@@ -6,6 +22,9 @@
 #include "array"
 #include <sstream>
 #include "string"
+#include <iostream>
+#include "fstream"
+#include "set"
 
 #include <GLFW/glfw3.h>
 #include "imgui/imgui.h"
@@ -13,19 +32,8 @@
 #include "imgui/imgui_impl_opengl3.h"
 
 /*
-    - add an import project option (finds all json files in a file tree and makes tml timelines)
-    - add a revert function pushes old diff to the front of the stack and re-serializes it
-    - add in file monitoring to auto update when files change
-*/
-
-/*
-    load jf_tree back into a file format (yaml, xml, json)
-
-    recursively load a file tree into memory (filtering out json data, yml data, etc)
-    actively monitor each file and evey time it is changed, commit a snapshot
-
-    UI :)
-*/
+    - add in new file tracking for projects
+*/ 
 
 #include <filesystem>
 #include <vector>
@@ -62,6 +70,8 @@ jf_TreeDiff jf_diff_get_main_type(jf_DiffNode* root) {
 std::map<std::string, std::string> get_project_folders(std::string base_folder_path) {
     std::map<std::string, std::string> folders;
 
+    printf("get project folders\n");
+
     // --- Discover .tml folders once ---
     if (folders.empty()) {
         for (const auto& dir_entry : fs::directory_iterator(base_folder_path)) {
@@ -90,6 +100,58 @@ std::vector<std::string> get_json_files_in_folder(const std::string& folder_path
     }
 
     return json_files;
+}
+
+size_t count_json_files_recurse(const std::string& root_folder) {
+    return get_json_files_in_folder(root_folder).size();
+}
+
+std::vector<std::string> find_json_files_recurse(const std::string& folder_path) {
+    if (folder_path.empty()) return {};
+
+    std::vector<std::string> result;
+
+    for (const auto& entry : fs::recursive_directory_iterator(folder_path)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            result.push_back(entry.path().string());
+        }
+    }
+
+    return result;
+}
+
+// this is a disgrace (thank good ol GPT)
+void copy_json_files_to_project_structure(const std::vector<std::string>& json_paths, const std::string& dest_dir) {
+    try {
+        fs::create_directories(dest_dir); // ensure the destination directory exists
+
+        for (const auto& json_path_str : json_paths) {
+            fs::path json_path(json_path_str);
+
+            if (!fs::exists(json_path) || json_path.extension() != ".json") {
+                std::cerr << "Skipping invalid JSON file: " << json_path << "\n";
+                continue;
+            }
+
+            std::string folder_name = json_path.stem().string() + ".tml";
+            fs::path folder_path = fs::path(dest_dir) / folder_name;
+            fs::create_directories(folder_path);
+
+            // Generate timestamped filename
+            std::time_t now = std::time(nullptr);
+            std::string timestamp_filename = std::to_string(now) + ".json";
+            fs::path target_file = folder_path / timestamp_filename;
+
+            // Copy contents
+            std::ifstream src(json_path, std::ios::binary);
+            std::ofstream dst(target_file, std::ios::binary);
+            dst << src.rdbuf();
+
+            std::cout << "Copied: " << json_path << " -> " << target_file << "\n";
+        }
+    } catch (const std::exception& ex) {
+        std::cerr << "Error: " << ex.what() << "\n";
+    }
 }
 
 bool draw_fullwidth_buttons(
@@ -155,6 +217,50 @@ ImU32 calculate_diff_color(jf_TreeDiff type) {
     return square_color;
 }
 
+bool is_valid_json_string(const std::string& str) {
+    try {
+        auto _ = nlohmann::json::parse(str); // explicitly use the result
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+std::string fnv1a_hash_str(const std::string& str) {
+    constexpr uint64_t FNV_OFFSET = 14695981039346656037ULL;
+    constexpr uint64_t FNV_PRIME  = 1099511628211ULL;
+
+    uint64_t hash = FNV_OFFSET;
+    for (char c : str) {
+        hash ^= static_cast<unsigned char>(c);
+        hash *= FNV_PRIME;
+    }
+
+    std::stringstream ss;
+    ss << std::hex << hash;
+    return ss.str();
+}
+
+std::string fnv1a_hash_file(const std::string& path) {
+    constexpr uint64_t FNV_OFFSET = 14695981039346656037ULL;
+    constexpr uint64_t FNV_PRIME  = 1099511628211ULL;
+
+    std::ifstream in(path, std::ios::binary);
+    if (!in.is_open()) return "";
+
+    uint64_t hash = FNV_OFFSET;
+    char c;
+    while (in.get(c)) {
+        hash ^= static_cast<unsigned char>(c);
+        hash *= FNV_PRIME;
+    }
+
+    std::stringstream ss;
+    ss << std::hex << hash;
+    return ss.str();
+}
+
+
 static bool path_updated = false;
 static std::vector<std::string> selected_node_path = {};
 static std::vector<jf_TreeDiff> diff_filters = { };
@@ -178,7 +284,7 @@ static bool compare_node_paths(const std::vector<std::string>& a, const std::vec
     return true;
 }
 
-void render_timeline_summary(jf_Timeline* timeline, std::function<void(jf_Timeline* selected)> on_pressed) {
+void render_timeline_summary(jf_Timeline* timeline, jf_Timeline* display_node, std::function<void(jf_Timeline* selected)> on_pressed) {
     if (!timeline) return;
 
     constexpr float square_size = 16.0f;
@@ -200,6 +306,16 @@ void render_timeline_summary(jf_Timeline* timeline, std::function<void(jf_Timeli
 
         ImGui::GetWindowDrawList()->AddRectFilled(pos, max, entry_color, 3.0f);
 
+        if (current->version == display_node->version) {
+            ImVec2 center = ImVec2(
+                pos.x + square_size * 0.5f,
+                pos.y + square_size * 0.5f
+            );
+
+            float dot_radius = square_size * 0.25f; // adjust size as needed
+            ImGui::GetWindowDrawList()->AddCircleFilled(center, dot_radius, IM_COL32(0, 0, 0, 128));
+        }
+
         ImGui::SameLine(0.0f, spacing); // move to next square
         current = current->next;
     }
@@ -216,10 +332,7 @@ void render_diff_tree(
     bool parent_selected = false,
     std::vector<std::string>& path = *(new std::vector<std::string>())
 ) {
-    if (!root) {
-        printf("missing root\n");
-        return;
-    }
+    if (!root) { return; }
 
     if (path.empty() && !prefix.empty()) {
         path = prefix;
@@ -269,9 +382,7 @@ void render_diff_tree(
             // gray out if unmatched
             if (type_matches && diff_matches) {
                 if (pressed) {
-                    printf("col\n");
                     selected_node_path = path;
-                    printf("Pressed path: %s\n", get_full_node_path().c_str());
                     path_updated = true;
                 }
 
@@ -313,16 +424,13 @@ void render_diff_tree(
                 x_indent += width + box_spacing;
             };
 
-            // Step 1: Count how many boxes will be drawn
             int box_count = 1; // always at least the key box
             if (root->node_a) box_count += 2;
             if (root->node_b && root->type != JF_DIFF_STALE) box_count += 2;
 
-            // Step 2: Compute width per box
             float box_width = (full_width - (box_spacing * (box_count - 1))) / box_count;
             x_indent = pos.x; // reset x_indent for this row
 
-            // Step 3: Render boxes
             render_clipped_box(root->key->str, box_width);
 
             if (root->node_a) {
@@ -334,11 +442,6 @@ void render_diff_tree(
                 render_clipped_box(jf_type_str(root->node_b->type), box_width);
                 render_clipped_box(get_value_string(root->node_b).c_str(), box_width);
             }
-
-            // Final dummy to set width
-            // ImGui::Dummy(ImVec2(x_indent, 0));
-
-            // ImGui::Dummy(ImVec2(x_indent, 0));
 
             if (root->child) {
                 ImGui::Unindent(depth * indentation_depth);
@@ -356,6 +459,248 @@ void render_diff_tree(
     ImGui::Unindent(depth * indentation_depth);
 }
 
+struct Project {
+    size_t last_file_count = 0;
+    std::string project_name = "pick a project";
+    std::string selected_name = "pick a timeline";
+    std::string selected_path = "";
+    std::string project_path = "";
+    std::string originating_path = "";
+    std::set<std::string> tracked_files = {};
+    std::map<std::string, std::string> tracked_hashes = {};
+    std::map<std::string, std::string> project_folders = {};
+
+    void create(std::string folder) {
+        printf("creating project from folder: %s\n", folder.c_str());
+        std::vector<std::string> found_files = find_json_files_recurse(folder);
+        for (std::string f : found_files) {
+            tracked_files.insert(f);
+        }
+
+        project_name = fs::path(folder).filename().string();
+        project_path = "./projects/" + project_name;
+        fs::create_directory(project_path);
+        copy_json_files_to_project_structure(found_files, project_path);
+        project_name = fs::path(project_path).filename().string();
+        project_folders.clear();
+        project_folders = get_project_folders(project_path);
+        originating_path = folder;
+        compute_latest_file_hashes();
+        save();
+    }
+
+    void import(std::string path) {
+        std::ifstream in(path + "/project.json");
+        if (!in.is_open()) return;
+
+        json j;
+        in >> j;
+
+        selected_path    = j.value("selected_path",    "");
+        project_path     = j.value("project_path",     "");
+        originating_path = j.value("originating_path", "");
+        last_file_count  = j.value("last_file_count",   0);
+        project_name     = j.value("project_name",     "pick a project");
+        selected_name    = j.value("selected_name",    "pick a timeline");
+        tracked_files    = j.value("tracked_files",    std::set<std::string>{});
+        project_folders  = j.value("project_folders",  std::map<std::string, std::string>{});
+        tracked_hashes   = j.value("tracked_hashes",   std::map<std::string, std::string>{});
+    }
+
+    void save() {
+        json j;
+        j["project_path"] = project_path;
+        j["project_name"] = project_name;
+        j["selected_name"] = selected_name;
+        j["tracked_files"] = tracked_files;
+        j["project_folders"] = project_folders;
+        j["tracked_hashes"] = tracked_hashes;
+        j["selected_path"] = selected_path;
+        j["last_file_count"] = last_file_count;
+        j["originating_path"] = originating_path;
+
+        std::ofstream out(project_path + "/project.json");
+        out << j.dump(4); // pretty print with indent
+    }
+
+    // this is really bad but its ok
+    void compute_latest_file_hashes() {
+        tracked_hashes.clear();
+
+        for (auto& path : tracked_files) {
+            std::string file_data;
+            std::string file_hash;
+
+            // if file doesnt exist hash empty json
+            std::ifstream in(path, std::ios::in | std::ios::binary);
+            if (!in) {
+                file_data = "{}";
+            } else {
+                std::ostringstream ss;
+                ss << in.rdbuf();
+                file_data = ss.str();
+            }
+
+            tracked_hashes[path] = file_hash;
+        }
+    }
+
+    bool check_timeline() {
+        if (project_path.empty()) return false;
+        if (originating_path.empty()) return false;
+
+        bool updated = false;
+
+        // look for new files
+        // WHAT THE FUCK EVEN IS THIS IAN? - ian
+        fs::path path_to_watch(originating_path);
+        if (fs::exists(path_to_watch) && fs::is_directory(path_to_watch)) {
+            std::vector<std::string> existing_files = find_json_files_recurse(originating_path);
+            size_t new_file_count = existing_files.size();
+            
+            if (new_file_count != last_file_count) {
+                for (const std::string& new_path : existing_files) {
+                    if (!tracked_files.count(new_path)) {
+                        printf("new file found %s\n", new_path.c_str());
+
+                        fs::path fpath = fs::path(new_path);
+                        std::string name = fpath.replace_extension(".tml").filename().string();
+                        std::string local_path = project_path + "/" + name;
+
+                        fs::create_directory(local_path);
+
+                        tracked_files.insert(new_path);
+                        project_folders.insert({name, local_path});
+                        last_file_count = new_file_count;
+                        updated = true;
+                    }
+                }
+            }
+        }
+
+        for (auto& path : tracked_files) {
+            std::string filename = fs::path(path).filename().string();
+            std::string folder_name = fs::path(path).stem().string() + ".tml";
+            std::string timeline_dir = project_path + "/" + folder_name;
+            fs::create_directory(timeline_dir);
+
+            if (!fs::exists(timeline_dir) || !fs::is_directory(timeline_dir)) {
+                continue;
+            }
+
+            std::string file_data;
+            std::string file_hash;
+
+            // if file doesnt exist hash empty json
+            std::ifstream in(path, std::ios::in | std::ios::binary);
+            if (!in) {
+                file_data = "{}";
+            } else {
+                std::ostringstream ss;
+                ss << in.rdbuf();
+                file_data = ss.str();
+            }
+
+            if (!is_valid_json_string(file_data)) {
+                continue;
+            }
+
+            file_hash = fnv1a_hash_str(file_data);
+
+            if (tracked_hashes[path] != file_hash) {
+                tracked_hashes[path] = file_hash;
+                fs::path file_path = fs::path(timeline_dir) / (std::to_string(std::time(nullptr)) + ".json");
+                std::string file_path_str = file_path.string();
+                std::ofstream out(file_path, std::ios::out | std::ios::binary);
+                if (out) {
+                    out.write(file_data.data(), file_data.size());
+                    updated = true;
+                } else {
+                    std::cerr << "Failed to write to file: " << file_path << "\n";
+                }
+            }
+        }
+
+        if (updated) { save(); }
+        return updated;
+    }
+};
+
+void update_diff_tree(
+    Project& project, 
+    jf_TimelineContext*& timeline_context, 
+    jf_Timeline*& timeline,
+    jf_Timeline*& display_node,
+    jf_Timeline*& timeline_filtered
+) {
+    jf_start();
+
+
+    if (timeline_context != NULL) {
+        jf_timeline_context_free(timeline_context);
+        timeline_context = NULL;
+    }
+
+    if (timeline != NULL) {
+        jf_timeline_free(timeline);
+        timeline_context = NULL;
+    }
+
+    if (timeline_filtered != NULL) {
+        jf_timeline_free(timeline_filtered);
+        timeline_filtered = NULL;
+    }
+
+    if (fs::exists(project.selected_path)) {
+        std::vector<std::string> files = get_json_files_in_folder(project.selected_path);
+
+        if (!files.empty()) {
+            // build timeline context
+            jf_timeline_context_alloc(&timeline_context, files.size());
+            for (int i = 0; i < files.size(); ++i) {
+                jf_string_alloc(&timeline_context->files[i], files[i].c_str(), files[i].size());
+            }
+
+            // build the actual timeline
+            jf_timeline_build_from_file_names(&timeline, timeline_context);
+
+            jf_Timeline* cur = timeline;
+
+            while (cur && cur->next) { cur = cur->next; }
+            display_node = cur;
+        }
+    }
+
+    jf_finish();
+}
+
+struct Session {
+    std::string project_path = "";
+
+    void save() {
+        json j;
+        j["project_path"] = project_path;
+
+        std::ofstream out("./session.json");
+        out << j.dump(4); // pretty print with indent
+    }
+
+    void load() {
+        std::ifstream in("./session.json");
+        if (!in.is_open()) return;
+
+        try {
+            json j;
+            in >> j;
+
+            project_path = j.value("project_path", "");
+        } catch(...) {
+            return;
+        }
+
+    }
+};
+
 int main() {
     if (!glfwInit()) return -1;
 
@@ -363,7 +708,8 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(1200, 900, "No ImGui Windows", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1200, 900, "Json Flow", nullptr, nullptr);
+    
     if (!window) {
         glfwTerminate();
         return -1;
@@ -371,7 +717,7 @@ int main() {
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
-
+    
     // ImGui setup
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -380,17 +726,16 @@ int main() {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    std::string project = "./timelines";
+    Session session;
+    session.load();
+    printf("sessios path=%s\n", session.project_path.c_str());
 
-    std::string selected_name = "pick a timeline";
-    std::map<std::string, std::string> project_folders = get_project_folders(project);
+    Project current_project;
+    current_project.import(session.project_path);
 
-    // jf current selection
     jf_TimelineContext* timeline_context = NULL;
     jf_Timeline* timeline = NULL;
     jf_Timeline* display_node = NULL;
-
-    // jf zoomed in selected
     jf_Timeline* timeline_filtered = NULL;
 
     ImVec4* colors = ImGui::GetStyle().Colors;
@@ -405,14 +750,22 @@ int main() {
     static bool diff_filter_removed = false;
     static bool diff_filter_changed = true;
     static bool diff_filter_stale   = true;
-    static bool type_filter_object = true;
-    static bool type_filter_array  = true;
-    static bool type_filter_string = true;
-    static bool type_filter_null   = true;
-    static bool type_filter_number = true;
-    static bool type_filter_bool   = true;
+    static bool type_filter_object  = true;
+    static bool type_filter_array   = true;
+    static bool type_filter_string  = true;
+    static bool type_filter_null    = true;
+    static bool type_filter_number  = true;
+    static bool type_filter_bool    = true;
 
     while (!glfwWindowShouldClose(window)) {
+        if (current_project.check_timeline()) {
+            update_diff_tree(current_project, timeline_context, timeline, display_node, timeline_filtered);
+
+            if (selected_node_path.size() > 0) {
+                path_updated = true;
+            }
+        }
+
         diff_filters.clear();
         type_filters.clear();
 
@@ -443,8 +796,7 @@ int main() {
                 current_path[i] = JF_STRING(selected_node_path[i].c_str(), selected_node_path[i].length());
             }
 
-
-            jf_timeline_filter_path(timeline, &timeline_filtered, current_path, selected_node_path.size());
+            jf_print_error(jf_timeline_filter_path(timeline, &timeline_filtered, current_path, selected_node_path.size()));
 
             jf_free(current_path);
             jf_finish();
@@ -475,7 +827,8 @@ int main() {
         ImGui::Begin("Entry Changes", nullptr, 
             ImGuiWindowFlags_NoResize | 
             ImGuiWindowFlags_NoMove | 
-            ImGuiWindowFlags_NoCollapse
+            ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_HorizontalScrollbar
         );
 
         if (timeline_filtered != NULL) {
@@ -485,9 +838,8 @@ int main() {
             float box_width = full_width / 5.0f;
             float box_height = ImGui::GetContentRegionAvail().y * 0.9f; // fixed height
 
-            int index = 0;
-            while (cur && index < 5) { // up to 5 boxes
-                ImGui::PushID(index);
+            while (cur) { // up to 5 boxes
+                ImGui::PushID(cur->version);
 
                 ImGui::BeginChild(
                     "TimelineBox",
@@ -505,12 +857,9 @@ int main() {
                 ImGui::EndChild();
                 ImGui::PopID();
 
-                cur = cur->next;
-                ++index;
+                ImGui::SameLine(0, 8.0f); // small gap between boxes
 
-                if (cur && index < 5) {
-                    ImGui::SameLine(0, 8.0f); // small gap between boxes
-                }
+                cur = cur->next;
             }
         }
 
@@ -519,7 +868,7 @@ int main() {
         // top left panel
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(third_w, two_third_h));
-        ImGui::Begin("Project", nullptr, 
+        ImGui::Begin(current_project.project_name.c_str(), nullptr, 
             ImGuiWindowFlags_NoResize | 
             ImGuiWindowFlags_NoMove | 
             ImGuiWindowFlags_NoCollapse | 
@@ -527,6 +876,33 @@ int main() {
         );
 
         if (ImGui::BeginMenuBar()) {
+            if (ImGui::BeginMenu("Project")) {
+                if (ImGui::MenuItem("Open Oproject")) {
+                    std::string cwd = std::filesystem::current_path().string();
+                    const char* folder = tinyfd_selectFolderDialog("Select a folder", cwd.c_str());
+                    if (folder) {
+                        current_project.import(folder);
+                        session.project_path = current_project.project_path;
+                        session.save();
+                    }
+                }
+
+                if (ImGui::MenuItem("New Project")) {
+                    const char* folder = tinyfd_selectFolderDialog("Select a folder", nullptr);
+                    if (folder) {
+                        current_project.create(folder);
+                        session.project_path = current_project.project_path;
+                        session.save();
+                    }
+                }
+
+                if (ImGui::MenuItem("Delete Project")) {
+                    ImGui::OpenPopup("ConfirmDeleteProject");
+                }
+
+                ImGui::EndMenu();
+            }
+
             if (ImGui::BeginMenu("Filters")) {
                 ImGui::Checkbox("Diff: Added",   &diff_filter_added);
                 ImGui::Checkbox("Diff: Removed", &diff_filter_removed);
@@ -541,67 +917,27 @@ int main() {
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("Open Folder")) {
-                    const char* folder = tinyfd_selectFolderDialog("Select a folder", nullptr);
-                    if (folder) {
-                        printf("Selected folder: %s\n", folder);
-                        // Do something with the path, e.g. load .json files
-                    }
-                }
-
-                ImGui::EndMenu();
-            }
             ImGui::EndMenuBar();
         }
 
         // render_project_files("./timelines/");
-        draw_fullwidth_buttons(project_folders, [&](const std::string& path, const std::string& name){ // onpressed
+        draw_fullwidth_buttons(current_project.project_folders, [&](const std::string& path, const std::string& name) { // onpressed
             selected_node_path.clear();
+            current_project.selected_name = name;
+            current_project.selected_path = path;
+            current_project.save();
 
-            if (timeline_filtered != NULL) {
-                jf_timeline_free(timeline_filtered);
-                timeline_filtered = NULL;
-            }
-
-            std::vector<std::string> files = get_json_files_in_folder(path);
-
-            jf_start();
-
-            if (timeline_context != NULL) {
-                jf_timeline_context_free(timeline_context);
-                timeline_context = NULL;
-            }
-
-            if (timeline != NULL) {
-                jf_timeline_free(timeline);
-                timeline_context = NULL;
-            }
-
-            // build timeline context
-            jf_timeline_context_alloc(&timeline_context, files.size());
-            for (int i = 0; i < files.size(); ++i) {
-                jf_string_alloc(&timeline_context->files[i], files[i].c_str(), files[i].size());
-            }
-
-            // build the actual timeline
-            jf_timeline_build_from_file_names(&timeline, timeline_context);
-
-            jf_Timeline* cur = timeline;
-            selected_name = name;
-
-            while (cur && cur->next) { cur = cur->next; }
-            display_node = cur;
-
-            jf_finish();
+            update_diff_tree(current_project, timeline_context, timeline, display_node, timeline_filtered);
         });
 
         ImGui::End();
 
+
+
         // timeline panel
         ImGui::SetNextWindowPos(ImVec2(third_w, 0));
         ImGui::SetNextWindowSize(ImVec2(two_third_w, two_third_h));
-        ImGui::Begin(selected_name.c_str(), nullptr, 
+        ImGui::Begin(current_project.selected_name.c_str(), nullptr, 
             ImGuiWindowFlags_NoResize | 
             ImGuiWindowFlags_NoMove | 
             ImGuiWindowFlags_NoCollapse | 
@@ -609,7 +945,7 @@ int main() {
         );
 
         if (timeline_context != NULL && timeline != NULL) {
-            render_timeline_summary(timeline, [&](jf_Timeline* selected) {
+            render_timeline_summary(timeline, display_node, [&](jf_Timeline* selected) {
                 display_node = selected;
             });
 

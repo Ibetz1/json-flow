@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-07-11T01:02:03Z",
+  "level": "warning",
+  "message": "Memory usage exceeded threshold",
+  "meta": {
+    "processId": 4392,
+    "thread": "worker-3"
+  }
+}

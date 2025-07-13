@@ -1,0 +1,8 @@
+{
+  "name": "Hackathon2025",
+  "owner": "ianbetz",
+  "created": "2025-07-10",
+  "contributors": ["alice", "bob", "carol"],
+  "tags": ["json", "visualization", "C++"],
+  "heloo": 123
+}
